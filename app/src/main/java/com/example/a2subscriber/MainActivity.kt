@@ -1,6 +1,9 @@
 package com.example.a2subscriber
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.location.Location
 import android.net.ParseException
 import android.os.Bundle
@@ -141,13 +144,14 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
     private fun drawPolyline(id: Int) {
         // Extract LatLng points from the custom marker points
         val listOfPoints = pointsMap[id]
+        val color = getColorForId(id)
         val latLngPoints = listOfPoints?.map { it.point }
 
         // Draw a polyline connecting all markers
         val polylineOptions = latLngPoints?.let {
             PolylineOptions()
                 .addAll(it)
-                .color(Color.BLUE)
+                .color(color)
                 .width(5f)
                 .geodesic(true)
         }
@@ -158,7 +162,7 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
                     .position(firstPoint)
                     .title("Last Position")
                     .snippet("ID: $id")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE))
+                    .icon(BitmapDescriptorFactory.defaultMarker(getHueFromColor(color)))
             )
         }
 
@@ -190,6 +194,7 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
         Log.d("MapDrawing", "Drawing ${listOfPoints.size} points for ID: $id")
 
         // Convert points to LatLng list
+        val color = getColorForId(id)
         val latLngPoints = listOfPoints.map { it.point }
 
         latLngPoints.firstOrNull()?.let { firstPoint ->
@@ -198,7 +203,7 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
                     .position(firstPoint)
                     .title("Last Position")
                     .snippet("ID: $id")
-                    .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE))
+                    .icon(BitmapDescriptorFactory.defaultMarker(getHueFromColor(color)))
             )
         }
 
@@ -206,7 +211,7 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
         if (latLngPoints.size >= 2) {
             val polylineOptions = PolylineOptions()
                 .addAll(latLngPoints)
-                .color(Color.BLUE)
+                .color(color)
                 .width(5f)
                 .geodesic(true)
 
@@ -382,8 +387,10 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
         findViewById<TextView>(R.id.minspds).text = "Min Speed (KM/H): "+String.format("%.3f", student.minSpd)
         findViewById<TextView>(R.id.avgspds).text = "Average Speed (KM/H): "+String.format("%.3f", student.avgSpd)
 
-        findViewById<TextView>(R.id.startDate).text = "Start Date: "+convertTimeToDate(temp.first().time)
-        findViewById<TextView>(R.id.EndDate).text = "Stop Date: "+convertTimeToDate(temp.last().time)
+        findViewById<TextView>(R.id.startTitle).text = "Start Date"
+        findViewById<TextView>(R.id.stopTitle).text = "Stop Date"
+        findViewById<TextView>(R.id.startDate).text = "(oldest date: "+convertTimeToDate(temp.first().time)+")"
+        findViewById<TextView>(R.id.EndDate).text = "(newest date: "+convertTimeToDate(temp.last().time)+")"
         findViewById<TextView>(R.id.maintitle).text = "Summary of "+student.id.toString()
 
         findViewById<TextView>(R.id.maxspds).visibility=View.VISIBLE
@@ -395,6 +402,8 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
         findViewById<EditText>(R.id.endDateEditText).visibility = View.VISIBLE
         findViewById<ConstraintLayout>(R.id.moreInfo).visibility = View.VISIBLE
         findViewById<Button>(R.id.button).visibility = View.VISIBLE
+        findViewById<TextView>(R.id.startTitle).visibility = View.VISIBLE
+        findViewById<TextView>(R.id.stopTitle).visibility = View.VISIBLE
         findViewById<RecyclerView>(R.id.rvStudents).visibility = View.GONE
         findViewById<TextView>(R.id.liveView).visibility = View.GONE
 
@@ -414,6 +423,8 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
         findViewById<Button>(R.id.button).visibility = View.GONE
         findViewById<EditText>(R.id.startDateEditText).visibility = View.GONE
         findViewById<EditText>(R.id.endDateEditText).visibility = View.GONE
+        findViewById<TextView>(R.id.startTitle).visibility = View.GONE
+        findViewById<TextView>(R.id.stopTitle).visibility = View.GONE
         findViewById<RecyclerView>(R.id.rvStudents).visibility = View.VISIBLE
         findViewById<TextView>(R.id.liveView).visibility = View.VISIBLE
 
@@ -449,15 +460,19 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
         if (startSeconds > 0 && endSeconds > 0 && startSeconds <= endSeconds) {
             results = dbHelper.getDataInRange(curId, startSeconds, endSeconds)
             Log.d("Date", "Checking ranges for $curId")
-            pointsMap[curId]=results
+            if(results.isNullOrEmpty()){
+                mMap.clear()
+            }else{
+                pointsMap[curId]?.clear()
+                pointsMap[curId]=results
+                mMap.clear()
+                drawPolyline(curId)
+            }
         } else {
-            Toast.makeText(this, "Invalid range, showing all data", Toast.LENGTH_SHORT).show()
-            results = dbHelper.getLocationDataById(curId)
-            pointsMap[curId]=results
-        }
+            Toast.makeText(this, "Invalid range", Toast.LENGTH_SHORT).show()
+            mMap.clear()
 
-        mMap.clear()
-        drawId(curId)
+        }
     }
 
     private fun setupDateRangeListeners() {
@@ -466,94 +481,87 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
 
         val dateFormatRegex = "^\\d{2}-\\d{2}-\\d{4}$".toRegex()
 
-        val textWatcher = object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+        // TextWatcher for formatting input
+        val autoFormatWatcher = { field: EditText ->
+            object : TextWatcher {
+                override fun beforeTextChanged(
+                    s: CharSequence?,
+                    start: Int,
+                    count: Int,
+                    after: Int
+                ) {
+                }
 
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
 
-            override fun afterTextChanged(s: Editable?) {
-                val startDate = startDateField.text.toString()
-                val endDate = endDateField.text.toString()
+                override fun afterTextChanged(s: Editable?) {
+                    val input = s.toString()
+                    val cleanInput = input.replace("-", "")
 
-                // Check if both dates match the full format
-                if (startDate.matches(dateFormatRegex) && endDate.matches(dateFormatRegex)) {
-                    val startSeconds = dateToSeconds(startDate)
-                    val endSeconds = dateToSeconds(endDate)
+                    // Add hyphens automatically
+                    val formattedInput = when {
+                        cleanInput.length > 2 && cleanInput.length <= 4 ->
+                            "${cleanInput.substring(0, 2)}-${cleanInput.substring(2)}"
 
-                    if (startSeconds != -1L && endSeconds != -1L) {
-                        handleDateRangeUpdate(startSeconds, endSeconds)
-                    } else {
-                        Log.e("DateValidation", "Invalid start or end date format.")
+                        cleanInput.length > 4 ->
+                            "${cleanInput.substring(0, 2)}-${
+                                cleanInput.substring(
+                                    2,
+                                    4
+                                )
+                            }-${cleanInput.substring(4)}"
+
+                        else -> cleanInput
+                    }
+
+                    // Prevent infinite loop
+                    if (input != formattedInput) {
+                        field.removeTextChangedListener(this)
+                        field.setText(formattedInput)
+                        field.setSelection(formattedInput.length)
+                        field.addTextChangedListener(this)
                     }
                 }
             }
         }
 
-        // Add the same TextWatcher to both fields
-        startDateField.addTextChangedListener(textWatcher)
-        endDateField.addTextChangedListener(textWatcher)
 
-        // Add input filter to automatically add hyphens
-        startDateField.addTextChangedListener(object : TextWatcher {
+        // Attach format watchers
+        startDateField.addTextChangedListener(autoFormatWatcher(startDateField))
+        endDateField.addTextChangedListener(autoFormatWatcher(endDateField))
+
+        // Shared TextWatcher for validation
+        val validationWatcher = object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
 
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
 
             override fun afterTextChanged(s: Editable?) {
-                val input = s.toString()
+                val startDate = startDateField.text.toString().trim()
+                val endDate = endDateField.text.toString().trim()
 
-                // Remove existing hyphens
-                val cleanInput = input.replace("-", "")
+                // Log inputs to debug
+                Log.d("Validation", "Start Date: $startDate, End Date: $endDate")
 
-                // Add hyphens automatically
-                val formattedInput = when {
-                    cleanInput.length > 2 && cleanInput.length <= 4 ->
-                        "${cleanInput.substring(0, 2)}-${cleanInput.substring(2)}"
-                    cleanInput.length > 4 ->
-                        "${cleanInput.substring(0, 2)}-${cleanInput.substring(2, 4)}-${cleanInput.substring(4)}"
-                    else -> input
-                }
+                if (startDate.matches(dateFormatRegex) && endDate.matches(dateFormatRegex)) {
+                    val startSeconds = dateToSeconds(startDate)
+                    val endSeconds = dateToSeconds(endDate)+86399
 
-                // Prevent infinite loop
-                if (input != formattedInput) {
-                    startDateField.removeTextChangedListener(this)
-                    startDateField.setText(formattedInput)
-                    startDateField.setSelection(formattedInput.length)
-                    startDateField.addTextChangedListener(this)
+                    if (startSeconds != -1L && endSeconds != -1L) {
+                        Log.d("Validation", "Dates are valid: Start Seconds=$startSeconds, End Seconds=$endSeconds")
+                        handleDateRangeUpdate(startSeconds, endSeconds)
+                    } else {
+                        Log.e("Validation", "Invalid date conversion.")
+                    }
+                } else {
+                    Log.d("Validation", "Dates do not match the format.")
                 }
             }
-        })
+        }
 
-        // Do the same for end date field
-        endDateField.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-
-            override fun afterTextChanged(s: Editable?) {
-                val input = s.toString()
-
-                // Remove existing hyphens
-                val cleanInput = input.replace("-", "")
-
-                // Add hyphens automatically
-                val formattedInput = when {
-                    cleanInput.length > 2 && cleanInput.length <= 4 ->
-                        "${cleanInput.substring(0, 2)}-${cleanInput.substring(2)}"
-                    cleanInput.length > 4 ->
-                        "${cleanInput.substring(0, 2)}-${cleanInput.substring(2, 4)}-${cleanInput.substring(4)}"
-                    else -> input
-                }
-
-                // Prevent infinite loop
-                if (input != formattedInput) {
-                    endDateField.removeTextChangedListener(this)
-                    endDateField.setText(formattedInput)
-                    endDateField.setSelection(formattedInput.length)
-                    endDateField.addTextChangedListener(this)
-                }
-            }
-        })
+        // Attach validation watcher
+        startDateField.addTextChangedListener(validationWatcher)
+        endDateField.addTextChangedListener(validationWatcher)
     }
 
 
@@ -618,6 +626,33 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
 
         dbHelper.logAllData()
     }
+
+    fun getColorForId(id: Int): Int {
+        // Hash the ID to get a consistent value
+        val hash = id.hashCode()
+
+        // Convert the hash value to a color
+        val red = (hash shr 16) and 0xFF // Extract the red component from the hash
+        val green = (hash shr 8) and 0xFF // Extract the green component from the hash
+        val blue = hash and 0xFF // Extract the blue component from the hash
+
+        // Return the color with full alpha (255)
+        return Color.argb(255, red, green, blue)
+    }
+
+    fun getHueFromColor(color: Int): Float {
+        // Convert the color to HSV
+        val hsv = FloatArray(3)
+        Color.colorToHSV(color, hsv)
+
+        // Extract the Hue (first value in the HSV array)
+        return hsv[0]
+    }
+
+
+
+
+
 }
 
 data class StudentInfo(val id: Int, var maxSpd: Double, var minSpd: Double, var avgSpd: Double, var totalEntries: Int) {

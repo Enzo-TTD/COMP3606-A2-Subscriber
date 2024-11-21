@@ -131,7 +131,7 @@
     <EditText
         android:id="@+id/startDateEditText"
         android:layout_width="103dp"
-        android:layout_height="36dp"
+        android:layout_height="40dp"
         android:layout_marginStart="12dp"
         android:ems="10"
         android:hint="dd-mm-yyyy"
@@ -142,12 +142,32 @@
     <EditText
         android:id="@+id/endDateEditText"
         android:layout_width="103dp"
-        android:layout_height="36dp"
+        android:layout_height="40dp"
         android:layout_marginEnd="16dp"
         android:ems="10"
         android:hint="dd-mm-yyyy"
         android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/map"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/startTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:text="TextView"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/startDate"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <TextView
+        android:id="@+id/stopTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
+        android:text="TextView"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@+id/EndDate"
         app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

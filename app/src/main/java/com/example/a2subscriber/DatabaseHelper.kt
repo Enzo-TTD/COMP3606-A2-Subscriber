@@ -244,7 +244,7 @@ class DatabaseHelper(context: Context, factory: SQLiteDatabase.CursorFactory?) :
         FROM ${DatabaseContract.DataEntry.TABLE_NAME}
         WHERE ${DatabaseContract.DataEntry.COLUMN_ID} = ? 
           AND ${DatabaseContract.DataEntry.COLUMN_TIMESTAMP} BETWEEN ? AND ?
-        ORDER BY ${DatabaseContract.DataEntry.COLUMN_TIMESTAMP} ASC
+        ORDER BY ${DatabaseContract.DataEntry.COLUMN_TIMESTAMP} DESC
     """
 
         val cursor = db.rawQuery(query, arrayOf(phoneId.toString(), startTime.toString(), endTime.toString()))

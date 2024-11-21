@@ -1,9 +1,6 @@
 package com.example.a2subscriber
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
 import android.location.Location
 import android.net.ParseException
 import android.os.Bundle
@@ -280,6 +277,57 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
         }
     }
 
+    private fun populateStudentInfo(id: Int, startTime: Long, endTime: Long) {
+        // Retrieve location data for the given ID and time range
+        val locationData = dbHelper.getDataInRange(id, startTime, endTime)
+        Log.d("StudentInfo", "Location data for ID $id in range: ${locationData.size} points")
+
+        if (locationData.size < 2) {
+            runOnUiThread {
+                findViewById<TextView>(R.id.maxspds).text = "Max Speed (KM/H): "+String.format("%.3f",0)
+                findViewById<TextView>(R.id.minspds).text = "Min Speed (KM/H): "+String.format("%.3f", 0)
+                findViewById<TextView>(R.id.avgspds).text = "Average Speed (KM/H): "+String.format("%.3f", 0)
+            }
+            Log.d("StudentInfo", "Skipping ID $id - not enough location points")
+            return // Need at least two points to calculate speed
+        }
+
+        var maxSpeed = 0.0
+        var minSpeed = Double.MAX_VALUE
+        var totalSpeed = 0.0
+        var count = 0
+
+        // Iterate through the location data to calculate speed between consecutive points
+        for (i in 1 until locationData.size) {
+            val prevPoint = locationData[i - 1]
+            val currentPoint = locationData[i]
+
+            // Calculate distance between the points
+            val distance = calculateDistance(prevPoint.point, currentPoint.point) / 1000 // Distance in km
+            val timeDiff = abs(currentPoint.time - prevPoint.time) / 3600.0 // Time in hours
+
+            val speed = distance / timeDiff
+            Log.d("StudentInfo", "ID: $id, Current Point Speed: $speed, Distance: $distance, Time: $timeDiff")
+
+            // Update max, min, and avg speed
+            if (speed > maxSpeed) maxSpeed = speed
+            if (speed < minSpeed) minSpeed = speed
+            totalSpeed += speed
+            count++
+        }
+
+        // Calculate average speed
+        val avgSpeed = if (count > 0) totalSpeed / count else 0.0
+
+
+        // Update the student list adapter
+        runOnUiThread {
+            findViewById<TextView>(R.id.maxspds).text = "Max Speed (KM/H): "+String.format("%.3f", maxSpeed)
+            findViewById<TextView>(R.id.minspds).text = "Min Speed (KM/H): "+String.format("%.3f", minSpeed)
+            findViewById<TextView>(R.id.avgspds).text = "Average Speed (KM/H): "+String.format("%.3f", avgSpeed)
+        }
+    }
+
     private fun populateStudentInfo() {
         val allIds = dbHelper.getAllIds()
         Log.d("StudentInfo", "Found ${allIds.size} student IDs")
@@ -460,6 +508,7 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
         if (startSeconds > 0 && endSeconds > 0 && startSeconds <= endSeconds) {
             results = dbHelper.getDataInRange(curId, startSeconds, endSeconds)
             Log.d("Date", "Checking ranges for $curId")
+            populateStudentInfo(curId,startSeconds, endSeconds)
             if(results.isNullOrEmpty()){
                 mMap.clear()
             }else{
@@ -621,8 +670,8 @@ class MapActivity : AppCompatActivity(), OnMapReadyCallback,OnMoreButtonClickLis
         processPayload("ID: 816033593, LAT: 10.640947, LONG: -61.402638, TIMESTAMP: $now")
         processPayload("ID: 816033593, LAT: 10.639731, LONG: -61.402749, TIMESTAMP: $then")
         processPayload("ID: 816033593, LAT: 10.640192, LONG: -61.402694, TIMESTAMP: $between")
-        processPayload("ID: 816031872, LAT: 10.637610, LONG: -61.400561, TIMESTAMP: $now")
-        processPayload("ID: 816031872, LAT: 10.638536, LONG: -61.399385, TIMESTAMP: $then")
+        processPayload("ID: 816036904, LAT: 10.638610, LONG: -61.400561, TIMESTAMP: $now")
+        processPayload("ID: 816036904, LAT: 10.639536, LONG: -61.399385, TIMESTAMP: $then")
 
         dbHelper.logAllData()
     }
